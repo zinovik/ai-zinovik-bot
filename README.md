@@ -30,7 +30,7 @@ gcloud iam service-accounts keys create key-file.json --iam-account=github-actio
 cat key-file.json | base64
 ```
 
-### add access to secrets and bucket
+### add access to secrets
 
 ```
 gcloud projects add-iam-policy-binding zinovik-project --member="serviceAccount:ai-zinovik-bot@zinovik-project.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
