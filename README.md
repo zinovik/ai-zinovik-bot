@@ -8,6 +8,13 @@ curl https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook?url=https://europe-
 
 ## google cloud setup
 
+### create bucket:
+
+```bash
+gcloud storage buckets create gs://ai-zinovik-bot --location=europe-central2
+gcloud storage buckets update gs://ai-zinovik-bot --versioning
+```
+
 ### create service accounts
 
 ```bash
@@ -30,9 +37,11 @@ gcloud iam service-accounts keys create key-file.json --iam-account=github-actio
 cat key-file.json | base64
 ```
 
-### add access to secrets
+### add access to secrets and buckets
 
 ```
+gcloud storage buckets add-iam-policy-binding gs://ai-zinovik-bot --member="serviceAccount:ai-zinovik-bot@zinovik-project.iam.gserviceaccount.com" --role="roles/storage.admin"
+
 gcloud projects add-iam-policy-binding zinovik-project --member="serviceAccount:ai-zinovik-bot@zinovik-project.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
 ```
 
