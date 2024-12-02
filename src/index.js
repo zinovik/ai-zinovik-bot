@@ -1,10 +1,32 @@
 const functions = require("@google-cloud/functions-framework");
+const { Storage } = require("@google-cloud/storage");
 
 const ALLOWED_TELEGRAM_IDS = [446618160, 510785355, 502448796, 984567315]; // [m, l, m, d]
 const ALLOWED_TELEGRAM_USERNAMES = [];
+
 const TELEGRAM_API_URL = "https://api.telegram.org/bot";
 const CHAT_GPT_URL = "https://api.openai.com/v1/chat/completions";
-// const HUGGING_FACE_URL = "https://api-inference.huggingface.co/models/gpt2";
+
+const BUCKET_NAME = "ai-zinovik-bot";
+const FILE_NAME = "history.json";
+
+const getHistory = async (bucketFile) => {
+  const file = await bucketFile.download();
+
+  return JSON.parse(file.toString());
+};
+
+const saveHistory = async (bucketFile, history) => {
+  await bucketFile.save(Buffer.from(JSON.stringify(history)), {
+    gzip: true,
+    public: false,
+    resumable: true,
+    contentType: "application/json",
+    metadata: {
+      cacheControl: "no-cache",
+    },
+  });
+};
 
 functions.http("main", async (req, res) => {
   console.log("Triggered!");
@@ -23,7 +45,7 @@ functions.http("main", async (req, res) => {
   console.log(
     `user: ${req.body.message.from.id}, ${req.body.message.from.username}`
   );
-  console.log(`request: ${req.body.message.text}`);
+  console.log(`user message: ${req.body.message.text}`);
 
   if (!req.body.message.text) {
     console.error(req.body.message);
@@ -31,7 +53,14 @@ functions.http("main", async (req, res) => {
     return;
   }
 
-  //
+  const storage = new Storage();
+  const bucketFile = storage.bucket(BUCKET_NAME).file(FILE_NAME);
+
+  const history = await getHistory(bucketFile);
+
+  const messages = history[req.body.message.from.id] || [];
+
+  messages.push({ role: "user", content: req.body.message.text });
 
   const response = await fetch(CHAT_GPT_URL, {
     method: "POST",
@@ -41,35 +70,18 @@ functions.http("main", async (req, res) => {
     },
     body: JSON.stringify({
       model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: req.body.message.text }],
+      messages,
     }),
   });
 
   const data = await response.json();
-  const answer = data.error?.message
+  const botReply = data.error?.message
     ? data.error.message
     : data.choices[0].message.content.trim();
 
-  //
+  messages.push({ role: "assistant", content: botReply });
 
-  // const response = await fetch(HUGGING_FACE_URL, {
-  //   method: "POST",
-  //   headers: {
-  //     "Content-Type": "application/json",
-  //     Authorization: `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
-  //   },
-  //   body: JSON.stringify({
-  //     inputs: req.body.message.text,
-  //   }),
-  // });
-
-  // const data = await response.json();
-  // console.log(data[0].generated_text);
-  // const answer = data[0].generated_text;
-
-  //
-
-  console.log(`response: ${answer}`);
+  console.log(`bot reply: ${botReply}`);
 
   await fetch(
     `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/sendMessage`,
@@ -79,11 +91,16 @@ functions.http("main", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: answer,
+        text: botReply,
         chat_id: req.body.message.from.id,
       }),
     }
   );
+
+  await saveHistory(bucketFile, {
+    ...history,
+    [req.body.message.from.id]: messages.slice(-100),
+  });
 
   console.log("Done!");
 
