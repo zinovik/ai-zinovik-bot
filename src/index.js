@@ -28,6 +28,24 @@ const saveHistory = async (bucketFile, history) => {
   });
 };
 
+const updateAndGetMessages = async (id, newMessage) => {
+  const storage = new Storage();
+  const bucketFile = storage.bucket(BUCKET_NAME).file(FILE_NAME);
+
+  const history = await getHistory(bucketFile);
+
+  const messages = history[id] || [];
+
+  const updatedMessages = [...messages, newMessage].slice(-100);
+
+  await saveHistory(bucketFile, {
+    ...history,
+    [id]: updatedMessages,
+  });
+
+  return updatedMessages;
+};
+
 functions.http("main", async (req, res) => {
   console.log("Triggered!");
 
@@ -53,14 +71,10 @@ functions.http("main", async (req, res) => {
     return;
   }
 
-  const storage = new Storage();
-  const bucketFile = storage.bucket(BUCKET_NAME).file(FILE_NAME);
-
-  const history = await getHistory(bucketFile);
-
-  const messages = history[req.body.message.from.id] || [];
-
-  messages.push({ role: "user", content: req.body.message.text });
+  const messages = await updateAndGetMessages(req.body.message.from.id, {
+    role: "user",
+    content: req.body.message.text,
+  });
 
   const response = await fetch(CHAT_GPT_URL, {
     method: "POST",
@@ -79,8 +93,6 @@ functions.http("main", async (req, res) => {
     ? data.error.message
     : data.choices[0].message.content.trim();
 
-  messages.push({ role: "assistant", content: botReply });
-
   console.log(`bot reply: ${botReply}`);
 
   await fetch(
@@ -97,9 +109,9 @@ functions.http("main", async (req, res) => {
     }
   );
 
-  await saveHistory(bucketFile, {
-    ...history,
-    [req.body.message.from.id]: messages.slice(-100),
+  await updateAndGetMessages(req.body.message.from.id, {
+    role: "assistant",
+    content: botReply,
   });
 
   console.log("Done!");
