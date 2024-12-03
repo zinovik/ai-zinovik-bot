@@ -36,7 +36,9 @@ const updateAndGetMessages = async (id, newMessage) => {
 
   const messages = history[id] || [];
 
-  const updatedMessages = [...messages, newMessage].slice(-100);
+  const updatedMessages = newMessage
+    ? [...messages, newMessage].slice(-100)
+    : [];
 
   await saveHistory(bucketFile, {
     ...history,
@@ -67,6 +69,12 @@ functions.http("main", async (req, res) => {
 
   if (!req.body.message.text) {
     console.error(req.body.message);
+    res.status(200).send({ success: true });
+    return;
+  }
+
+  if (req.body.message.text.toLowerCase() === "clear") {
+    await updateAndGetMessages(req.body.message.from.id);
     res.status(200).send({ success: true });
     return;
   }
