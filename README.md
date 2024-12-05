@@ -1,5 +1,18 @@
 # ai-zinovik-bot
 
+```bash
+curl --location 'http://localhost:8080?token=APP_TOKEN' \
+--header 'Content-Type: application/json' \
+--data '{
+    "message": {
+        "text": "test text",
+        "from": {
+            "id": 446618160
+        }
+    }
+}'
+```
+
 ## bot setup
 
 ```bash

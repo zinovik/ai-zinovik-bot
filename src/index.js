@@ -8,16 +8,28 @@ const TELEGRAM_API_URL = "https://api.telegram.org/bot";
 const CHAT_GPT_URL = "https://api.openai.com/v1/chat/completions";
 
 const BUCKET_NAME = "ai-zinovik-bot";
-const FILE_NAME = "history.json";
 
-const getHistory = async (bucketFile) => {
-  const file = await bucketFile.download();
+const MESSAGES_HISTORY_SIZE = 100;
 
-  return JSON.parse(file.toString());
-};
+const updateMessages = async (id, newMessage) => {
+  const storage = new Storage();
+  const bucketFile = storage.bucket(BUCKET_NAME).file(`${id}.json`);
 
-const saveHistory = async (bucketFile, history) => {
-  await bucketFile.save(Buffer.from(JSON.stringify(history)), {
+  let messages;
+
+  try {
+    const file = await bucketFile.download();
+    messages = JSON.parse(file.toString());
+  } catch (error) {
+    console.log("New history");
+    messages = [];
+  }
+
+  const updatedMessages = newMessage
+    ? [...messages, newMessage].slice(0 - MESSAGES_HISTORY_SIZE)
+    : [];
+
+  await bucketFile.save(Buffer.from(JSON.stringify(updatedMessages)), {
     gzip: true,
     public: false,
     resumable: true,
@@ -25,24 +37,6 @@ const saveHistory = async (bucketFile, history) => {
     metadata: {
       cacheControl: "no-cache",
     },
-  });
-};
-
-const updateAndGetMessages = async (id, newMessage) => {
-  const storage = new Storage();
-  const bucketFile = storage.bucket(BUCKET_NAME).file(FILE_NAME);
-
-  const history = await getHistory(bucketFile);
-
-  const messages = history[id] || [];
-
-  const updatedMessages = newMessage
-    ? [...messages, newMessage].slice(-100)
-    : [];
-
-  await saveHistory(bucketFile, {
-    ...history,
-    [id]: updatedMessages,
   });
 
   return updatedMessages;
@@ -74,12 +68,12 @@ functions.http("main", async (req, res) => {
   }
 
   if (req.body.message.text.toLowerCase() === "clear") {
-    await updateAndGetMessages(req.body.message.from.id);
+    await updateMessages(req.body.message.from.id, null);
     res.status(200).send({ success: true });
     return;
   }
 
-  const messages = await updateAndGetMessages(req.body.message.from.id, {
+  const messages = await updateMessages(req.body.message.from.id, {
     role: "user",
     content: req.body.message.text,
   });
@@ -117,7 +111,7 @@ functions.http("main", async (req, res) => {
     }
   );
 
-  await updateAndGetMessages(req.body.message.from.id, {
+  await updateMessages(req.body.message.from.id, {
     role: "assistant",
     content: botReply,
   });
