@@ -85,7 +85,7 @@ functions.http("main", async (req, res) => {
       Authorization: `Bearer ${process.env.CHATGPT_TOKEN}`,
     },
     body: JSON.stringify({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4-0125-preview",
       messages,
     }),
   });
