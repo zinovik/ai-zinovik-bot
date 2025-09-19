@@ -78,6 +78,23 @@ functions.http("main", async (req, res) => {
     content: req.body.message.text,
   });
 
+  const sendProgressMsg = await fetch(
+    `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/sendMessage`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: "Thinking... Please wait",
+        chat_id: req.body.message.from.id,
+      }),
+    }
+  );
+
+  const progressMsgData = await sendProgressMsg.json();
+  const messageId = progressMsgData.result.message_id;
+
   const response = await fetch(CHAT_GPT_URL, {
     method: "POST",
     headers: {
@@ -98,7 +115,7 @@ functions.http("main", async (req, res) => {
   console.log(`bot reply: ${botReply}`);
 
   await fetch(
-    `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/sendMessage`,
+    `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/editMessageText`,
     {
       method: "POST",
       headers: {
@@ -107,6 +124,7 @@ functions.http("main", async (req, res) => {
       body: JSON.stringify({
         text: botReply,
         chat_id: req.body.message.from.id,
+        message_id: messageId,
       }),
     }
   );
