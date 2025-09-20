@@ -69,6 +69,35 @@ functions.http("main", async (req, res) => {
 
   if (req.body.message.text.toLowerCase() === "clear") {
     await updateMessages(req.body.message.from.id, null);
+
+    const clearedMessage = await fetch(
+      `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/sendMessage`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: "The history has been cleared",
+          chat_id: req.body.message.from.id,
+        }),
+      }
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    await fetch(
+      `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/deleteMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: req.body.message.from.id,
+          message_id: (await clearedMessage.json()).result.message_id,
+        }),
+      }
+    );
+
     res.status(200).send({ success: true });
     return;
   }
@@ -95,17 +124,36 @@ functions.http("main", async (req, res) => {
   const progressMsgData = await sendProgressMsg.json();
   const messageId = progressMsgData.result.message_id;
 
-  const response = await fetch(CHAT_GPT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.CHATGPT_TOKEN}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-5", // TODO: Move to file or config
-      messages,
-    }),
-  });
+  let response;
+
+  try {
+    response = await fetch(CHAT_GPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.CHATGPT_TOKEN}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-5", // TODO: Move to file or config
+        messages,
+      }),
+    });
+  } catch (error) {
+    await fetch(
+      `${TELEGRAM_API_URL}${process.env["TELEGRAM_TOKEN"]}/editMessageText`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: `Error: ${error.message}`,
+          chat_id: req.body.message.from.id,
+          message_id: messageId,
+        }),
+      }
+    );
+  }
 
   const data = await response.json();
   const botReply = data.error?.message
